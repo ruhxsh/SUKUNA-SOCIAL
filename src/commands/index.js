@@ -174,7 +174,7 @@ export async function handleCommand(message, args, store) {
       return message.reply(entries.length ? "**Custom interactions**\\n" + entries.map(([name, text]) => name + " — " + text).join("\\n") : "No custom interactions are configured.");
     }
     const name = (args.shift() || "").toLowerCase();
-    if (!/^[a-z][a-z0-9_-]{1,19}$/.test(name) || Object.hasOwn(INTERACTIONS, name)) throw new Error("Use a custom name of 2–20 letters, numbers, hyphens or underscores; it cannot replace a built-in command.");
+    if (!/^[a-z][a-z0-9_-]{1,19}$/.test(name) || Object.hasOwn(INTERACTIONS, name) || ["help", "profile", "relationship", "socialstats", "socialleaderboard", "interaction"].includes(name)) throw new Error("Use a custom name of 2–20 letters, numbers, hyphens or underscores; it cannot replace a built-in command.");
     if (sub === "add") {
       const response = cleanText(args.join(" "), 180);
       if (!response) throw new Error("Provide a short friendly interaction message.");
