@@ -166,18 +166,59 @@ export async function handleCommand(message, args, store) {
     return message.reply("**" + displayName(message, id) + " — Social statistics**\nGiven: " + profile.stats.given + "\nReceived: " + profile.stats.received + "\nActivity: " + profile.stats.activity);
   }
 
+  if (command === "interaction") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) throw new Error("You need Manage Server permission to configure custom interactions.");
+    const sub = (args.shift() || "list").toLowerCase();
+    if (sub === "list") {
+      const entries = Object.entries(store.getGuild(guildId).customInteractions || {});
+      return message.reply(entries.length ? "**Custom interactions**\\n" + entries.map(([name, text]) => name + " — " + text).join("\\n") : "No custom interactions are configured.");
+    }
+    const name = (args.shift() || "").toLowerCase();
+    if (!/^[a-z][a-z0-9_-]{1,19}$/.test(name) || Object.hasOwn(INTERACTIONS, name)) throw new Error("Use a custom name of 2–20 letters, numbers, hyphens or underscores; it cannot replace a built-in command.");
+    if (sub === "add") {
+      const response = cleanText(args.join(" "), 180);
+      if (!response) throw new Error("Provide a short friendly interaction message.");
+      await mutate(store, guildId, guild => { guild.customInteractions ??= {}; guild.customInteractions[name] = response; });
+      return message.reply("Custom interaction " + name + " was saved.");
+    }
+    if (sub === "remove") {
+      const removed = await mutate(store, guildId, guild => { if (!guild.customInteractions?.[name]) return false; delete guild.customInteractions[name]; return true; });
+      return message.reply(removed ? "Custom interaction removed." : "That custom interaction was not found.");
+    }
+    throw new Error("Use interaction add, remove, or list.");
+  }
+
   if (command === "socialleaderboard") {
+    const toggle = (args[0] || "").toLowerCase();
+    if (toggle === "on" || toggle === "off") {
+      if (!message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) throw new Error("You need Manage Server permission to change this setting.");
+      await mutate(store, guildId, guild => { guild.socialLeaderboardEnabled = toggle === "on"; });
+      return message.reply("Social leaderboard " + (toggle === "on" ? "enabled." : "disabled."));
+    }
     const guild = store.getGuild(guildId);
+    if (guild.socialLeaderboardEnabled === false) return message.reply("The social leaderboard is disabled by a server administrator.");
     const rows = Object.values(guild.profiles || {})
       .filter(profile => profile.statsVisibility === "public")
       .sort((a, b) => (b.stats?.activity || 0) - (a.stats?.activity || 0))
       .slice(0, 10);
     if (!rows.length) return message.reply("There are no public social statistics to rank yet.");
-    return message.reply("**SOCIAL activity leaderboard**\n" + rows.map((profile, i) =>
+    return message.reply("**SOCIAL activity leaderboard**\\n" + rows.map((profile, i) =>
       (i + 1) + ". " + displayName(message, profile.userId) + " — " + (profile.stats?.activity || 0) + " activity"
-    ).join("\n"));
+    ).join("\\n"));
   }
 
-  const customText = store.getGuild(guildId).customInteractions?.[command];\n  if (customText) {\n    const target = targetUser(message);\n    if (target.id === userId) throw new Error("You cannot interact with yourself.");\n    const key = guildId + ":" + userId;\n    const now = Date.now();\n    if (now - (cooldowns.get(key) || 0) < COOLDOWN_MS) throw new Error("Please wait a few seconds before another interaction.");\n    await mutate(store, guildId, guild => recordInteraction(guild, userId, target.id));\n    cooldowns.set(key, now);\n    const rendered = customText.replaceAll("{actor}", message.author.username).replaceAll("{target}", target.username);\n    return message.reply({ content: rendered, allowedMentions: { parse: [] } });\n  }\n\n  logger.warn("Unknown SOCIAL command", { guildId, command: command || "(empty)", userId });
+  const customText = store.getGuild(guildId).customInteractions?.[command];
+  if (customText) {
+    const target = targetUser(message);
+    if (target.id === userId) throw new Error("You cannot interact with yourself.");
+    const key = guildId + ":" + userId;
+    const now = Date.now();
+    if (now - (cooldowns.get(key) || 0) < COOLDOWN_MS) throw new Error("Please wait a few seconds before another interaction.");
+    await mutate(store, guildId, guild => recordInteraction(guild, userId, target.id));
+    cooldowns.set(key, now);
+    const rendered = customText.replaceAll("{actor}", message.author.username).replaceAll("{target}", target.username);
+    return message.reply({ content: rendered, allowedMentions: { parse: [] } });
+  }
+  logger.warn("Unknown SOCIAL command", { guildId, command: command || "(empty)", userId });
   return message.reply("Unknown command. Use s help.");
 }
