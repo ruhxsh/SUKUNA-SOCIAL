@@ -42,7 +42,7 @@ Independent Discord bot for social interaction and member profiles.
 - Node.js 22 or newer
 - Discord.js 14
 - Set DISCORD_TOKEN in the host environment.
-- Enable Message Content Intent in the Discord Developer Portal.
+- Enable Message Content Intent in the Discord Developer Portal. The bot does not currently request the privileged Server Members Intent.
 - Run npm install, npm test, npm run check, then npm start.
 
 The prefix is lowercase s. Data is stored in data/social-data.json by default. Keep the data directory and token out of Git.
