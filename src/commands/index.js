@@ -1,3 +1,4 @@
+import { PermissionsBitField } from "discord.js";
 import { logger } from "../logger.js";
 import {
   ensureProfile, recordInteraction, createRelationshipRequest,
@@ -61,7 +62,9 @@ export async function handleCommand(message, args, store) {
     "s relationship status [@member]",
     "s relationship remove @member",
     "s socialstats [@member]",
-    "s socialleaderboard"
+    "s socialleaderboard [on|off] (Manage Server)",
+    "s interaction add <name> <message> | remove <name> | list (Manage Server)",
+    "Custom interactions are used as: s <name> @member"
   ].join("\n"));
 
   if (command === "profile") {
@@ -175,6 +178,6 @@ export async function handleCommand(message, args, store) {
     ).join("\n"));
   }
 
-  logger.warn("Unknown SOCIAL command", { guildId, command: command || "(empty)", userId });
+  const customText = store.getGuild(guildId).customInteractions?.[command];\n  if (customText) {\n    const target = targetUser(message);\n    if (target.id === userId) throw new Error("You cannot interact with yourself.");\n    const key = guildId + ":" + userId;\n    const now = Date.now();\n    if (now - (cooldowns.get(key) || 0) < COOLDOWN_MS) throw new Error("Please wait a few seconds before another interaction.");\n    await mutate(store, guildId, guild => recordInteraction(guild, userId, target.id));\n    cooldowns.set(key, now);\n    const rendered = customText.replaceAll("{actor}", message.author.username).replaceAll("{target}", target.username);\n    return message.reply({ content: rendered, allowedMentions: { parse: [] } });\n  }\n\n  logger.warn("Unknown SOCIAL command", { guildId, command: command || "(empty)", userId });
   return message.reply("Unknown command. Use s help.");
 }
