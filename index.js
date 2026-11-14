@@ -33,7 +33,7 @@ client.on("messageCreate", async message => {
   if (!body) return;
 
   try {
-    await handleCommand(message, body.split(/\s+/));
+    await handleCommand(message, body.split(/\s+/), store);
   } catch (error) {
     logger.error("Command handler failed", {
       command: body.split(/\s+/, 1)[0],
