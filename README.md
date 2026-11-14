@@ -11,7 +11,8 @@ Independent Discord bot for social interaction and member profiles.
 - Interaction counters for given, received, and total activity.
 - Automatic achievement milestones.
 - Relationship requests, acceptance, decline, status, and removal.
-- Public social activity leaderboard.
+- Optional public social activity leaderboard with server-admin toggle.
+- Server-configurable custom friendly interactions with safe mention handling.
 - Persistent JSON storage with serialized updates.
 
 ## Commands
@@ -30,7 +31,11 @@ Independent Discord bot for social interaction and member profiles.
 - s relationship status [@member]
 - s relationship remove @member
 - s socialstats [@member]
-- s socialleaderboard
+- s socialleaderboard [on|off]
+- s interaction add <name> <message>
+- s interaction remove <name>
+- s interaction list
+- s <custom-name> @member
 
 ## Setup
 
