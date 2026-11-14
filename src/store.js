@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile, copyFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -9,56 +9,53 @@ function normalizeState(value) {
   if (!value.guilds || typeof value.guilds !== "object" || Array.isArray(value.guilds)) {
     return EMPTY_STATE();
   }
-  return {
-    version: 1,
-    guilds: value.guilds
-  };
+  return { version: 1, guilds: value.guilds };
 }
 
 export function createStore(filePath) {
   const target = resolve(filePath);
   let state = EMPTY_STATE();
   let writeQueue = Promise.resolve();
+  let operationQueue = Promise.resolve();
 
   async function persist() {
     const snapshot = JSON.stringify(state, null, 2);
-    const directory = dirname(target);
-    await mkdir(directory, { recursive: true });
+    await mkdir(dirname(target), { recursive: true });
     const temporary = target + "." + randomUUID() + ".tmp";
     try {
       await writeFile(temporary, snapshot, { encoding: "utf8", mode: 0o600 });
       await rename(temporary, target);
     } catch (error) {
-      await import("node:fs/promises").then(fs => fs.unlink(temporary).catch(() => {}));
+      await unlink(temporary).catch(() => {});
       throw error;
     }
   }
 
   function queuePersist() {
-    writeQueue = writeQueue.then(persist);
+    writeQueue = writeQueue.catch(() => {}).then(persist);
     return writeQueue;
   }
 
   return {
     async load() {
+      let raw;
       try {
-        const raw = await readFile(target, "utf8");
-        try {
-          state = normalizeState(JSON.parse(raw));
-        } catch (error) {
-          const backup = target + ".corrupt-" + Date.now() + ".bak";
-          await copyFile(target, backup).catch(() => {});
-          state = EMPTY_STATE();
-          await queuePersist();
-          throw new Error("Data file was invalid JSON; a backup was attempted at " + backup, { cause: error });
-        }
+        raw = await readFile(target, "utf8");
       } catch (error) {
-        if (error.code === "ENOENT") {
-          state = EMPTY_STATE();
-          await queuePersist();
-        } else {
-          throw error;
-        }
+        if (error.code !== "ENOENT") throw error;
+        state = EMPTY_STATE();
+        await queuePersist();
+        return;
+      }
+
+      try {
+        state = normalizeState(JSON.parse(raw));
+      } catch (error) {
+        const backup = target + ".corrupt-" + Date.now() + ".bak";
+        await copyFile(target, backup);
+        state = EMPTY_STATE();
+        await queuePersist();
+        throw new Error("Data file was invalid JSON; original data was backed up to " + backup, { cause: error });
       }
     },
 
@@ -66,20 +63,31 @@ export function createStore(filePath) {
       return structuredClone(state.guilds[guildId] ?? {});
     },
 
-    async updateGuild(guildId, updater) {
-      if (!/^\d{17,20}$/.test(guildId)) throw new TypeError("Invalid Discord guild ID.");
-      if (typeof updater !== "function") throw new TypeError("Updater must be a function.");
-      const current = structuredClone(state.guilds[guildId] ?? {});
-      const next = updater(current);
-      if (!next || typeof next !== "object" || Array.isArray(next)) {
-        throw new TypeError("Guild data updater must return an object.");
+    updateGuild(guildId, updater) {
+      if (typeof guildId !== "string" || !/^\d{17,20}$/.test(guildId)) {
+        return Promise.reject(new TypeError("Invalid Discord guild ID."));
       }
-      state.guilds[guildId] = next;
-      await queuePersist();
-      return structuredClone(next);
+      if (typeof updater !== "function") {
+        return Promise.reject(new TypeError("Updater must be a function."));
+      }
+
+      let result;
+      const operation = operationQueue.then(async () => {
+        const current = structuredClone(state.guilds[guildId] ?? {});
+        const next = updater(current);
+        if (!next || typeof next !== "object" || Array.isArray(next)) {
+          throw new TypeError("Guild data updater must return an object.");
+        }
+        state.guilds[guildId] = next;
+        await queuePersist();
+        result = structuredClone(next);
+      });
+      operationQueue = operation.catch(() => {});
+      return operation.then(() => result);
     },
 
     async flush() {
+      await operationQueue;
       await writeQueue;
     }
   };
