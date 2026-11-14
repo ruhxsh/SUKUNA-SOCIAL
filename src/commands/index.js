@@ -128,8 +128,12 @@ export async function handleCommand(message, args, store) {
   if (command === "relationship") {
     const sub = (args.shift() || "").toLowerCase();
     if (sub === "request") {
+      const requestKey = guildId + ":relationship:" + userId;
+      const requestNow = Date.now();
+      if (requestNow - (cooldowns.get(requestKey) || 0) < 10000) throw new Error("Please wait before sending another relationship request.");
       const target = targetUser(message);
       await mutate(store, guildId, guild => createRelationshipRequest(guild, userId, target.id));
+      cooldowns.set(requestKey, requestNow);
       return message.reply("Relationship request sent to <@" + target.id + ">.");
     }
     if (sub === "accept" || sub === "decline") {
