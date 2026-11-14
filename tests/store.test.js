@@ -36,6 +36,22 @@ test("store returns copies rather than exposing internal state", async () => {
   }
 });
 
+test("store serializes concurrent guild updates without losing changes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "sukuna-social-"));
+  try {
+    const store = createStore(join(directory, "data.json"));
+    await store.load();
+    const guildId = "12345678901234567";
+    await store.updateGuild(guildId, () => ({ count: 0 }));
+    await Promise.all(Array.from({ length: 20 }, () =>
+      store.updateGuild(guildId, current => ({ count: current.count + 1 }))
+    ));
+    assert.equal(store.getGuild(guildId).count, 20);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("store rejects invalid guild IDs", async () => {
   const directory = await mkdtemp(join(tmpdir(), "sukuna-social-"));
   try {
